@@ -1,4 +1,4 @@
-name: SAST Scan (Semgrep + HTML Dashboard)
+name: SAST Scan 
 
 on:
   push:
@@ -9,21 +9,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ✅ Checkout your repo
+      # Checkout your repo
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      # ✅ Pull WebGoat (official upstream)
+      # Pull WebGoat 
       - name: Clone WebGoat
         run: |
           git clone --depth=1 https://github.com/WebGoat/WebGoat.git
 
-      # ✅ Install dependencies
+      # Install dependencies
       - name: Install tools
         run: |
           pip install semgrep
 
-      # ✅ Run Semgrep scan
+      # Run Semgrep scan
       - name: Run Semgrep
         run: |
           mkdir -p output
@@ -32,12 +32,12 @@ jobs:
             --json \
             ./WebGoat > output/results.json
 
-      # ✅ Generate HTML dashboard
+      # Generate HTML dashboard
       - name: Generate HTML report
         run: |
           python3 scripts/generate_report.py
 
-      # ✅ Upload report
+      # Upload report
       - name: Upload dashboard
         uses: actions/upload-artifact@v4
         with:
