@@ -9,22 +9,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ✅ 1. Checkout your repo
+      # ✅ Checkout your repo
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      # ✅ 2. Clone WebGoat (or your fork)
+      # ✅ Pull WebGoat (official upstream)
       - name: Clone WebGoat
         run: |
-          git clone --depth=1 https://github.com/YOUR_USERNAME/WebGoat.git
+          git clone --depth=1 https://github.com/WebGoat/WebGoat.git
 
-      # ✅ 3. Install dependencies
-      - name: Install Python deps + Semgrep
+      # ✅ Install dependencies
+      - name: Install tools
         run: |
-          pip install -r requirements.txt
           pip install semgrep
 
-      # ✅ 4. Run Semgrep scan
+      # ✅ Run Semgrep scan
       - name: Run Semgrep
         run: |
           mkdir -p output
@@ -33,12 +32,12 @@ jobs:
             --json \
             ./WebGoat > output/results.json
 
-      # ✅ 5. Generate HTML dashboard
+      # ✅ Generate HTML dashboard
       - name: Generate HTML report
         run: |
           python3 scripts/generate_report.py
 
-      # ✅ 6. Upload dashboard artifact
+      # ✅ Upload report
       - name: Upload dashboard
         uses: actions/upload-artifact@v4
         with:
