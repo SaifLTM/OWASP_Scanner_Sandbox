@@ -5,25 +5,30 @@ from collections import Counter
 with open("output/results.json") as f:
     data = json.load(f)
 
-raw_results = data.get("results", [])
+results = data.get("results", [])
 
 findings = []
 
-# ✅ Extract + normalize fields
-for r in raw_results:
+# Extract fields + generate Semgrep rule link
+for r in results:
+    rule_id = r.get("check_id")
+    meta = r.get("extra", {}).get("metadata", {})
+
+    rule_url = f"https://semgrep.dev/r?q={rule_id}"
+
     findings.append({
-        "rule_id": r.get("check_id"),
+        "rule_id": rule_id,
         "file": r.get("path"),
         "line": r.get("start", {}).get("line"),
         "severity": r.get("extra", {}).get("severity", "UNKNOWN"),
         "description": r.get("extra", {}).get("message", ""),
-        "cwe": r.get("extra", {}).get("metadata", {}).get("cwe", "N/A"),
-        "owasp": r.get("extra", {}).get("metadata", {}).get("owasp", "N/A"),
-        "remediation": r.get("extra", {}).get("fix", "Follow OWASP guidelines")
+        "cwe": meta.get("cwe", "N/A"),
+        "owasp": meta.get("owasp", "N/A"),
+        "rule_url": rule_url
     })
 
-# ✅ Normalize severity
-def normalize_severity(sev):
+# Normalize severity
+def normalize(sev):
     sev = str(sev).upper()
     if sev in ["ERROR", "HIGH"]:
         return "HIGH"
@@ -34,16 +39,16 @@ def normalize_severity(sev):
     return "UNKNOWN"
 
 for f in findings:
-    f["severity"] = normalize_severity(f["severity"])
+    f["severity"] = normalize(f["severity"])
 
-# ✅ Sort by severity
+# Sort by severity
 priority = {"HIGH": 1, "MEDIUM": 2, "LOW": 3, "UNKNOWN": 4}
 findings.sort(key=lambda x: priority[x["severity"]])
 
-# ✅ Summary counts
+# Summary counts
 counts = Counter(f["severity"] for f in findings)
 
-# ✅ Generate HTML
+# Generate HTML
 html = f"""
 <html>
 <head>
@@ -60,6 +65,15 @@ body {{ font-family: Arial; margin: 30px; }}
   margin: 10px 0;
   box-shadow: 2px 2px 8px #eee;
 }}
+.link {{
+  display: inline-block;
+  margin-top: 8px;
+  color: #1a73e8;
+  text-decoration: none;
+}}
+.link:hover {{
+  text-decoration: underline;
+}}
 </style>
 </head>
 <body>
@@ -73,12 +87,12 @@ body {{ font-family: Arial; margin: 30px; }}
 <li>Low: {counts.get("LOW", 0)}</li>
 </ul>
 
-<input type="text" id="search" placeholder="Search findings..." style="padding:8px;width:300px;">
+<input type="text" id="search" placeholder="Search findings..." style="padding:8px;width:300px">
 
 <hr>
 """
 
-# ✅ Render findings
+# Render findings
 for f in findings:
     html += f"""
     <div class="card">
@@ -86,11 +100,15 @@ for f in findings:
         <p><b>File:</b> {f['file']}:{f['line']}</p>
         <p><b>Description:</b> {f['description']}</p>
         <p><b>CWE:</b> {f['cwe']} | <b>OWASP:</b> {f['owasp']}</p>
-        <p><b>Remediation:</b> ✅ {f['remediation']}</p>
+
+        <p><b>Remediation:</b></p>
+        <a class="link" href="{f['rule_url']}" target="_blank">
+            🔧 View Fix Guidance
+        </a>
     </div>
     """
 
-# ✅ Add search feature
+# Search functionality
 html += """
 <script>
 document.getElementById('search').addEventListener('input', function(e) {
@@ -104,8 +122,8 @@ document.getElementById('search').addEventListener('input', function(e) {
 
 html += "</body></html>"
 
-# ✅ Save file
+# Save file
 with open("output/security-report.html", "w") as f:
     f.write(html)
 
-print("✅ Dashboard generated: output/security-report.html")
+print(" Dashboard generated: output/security-report.html")
