@@ -1,4 +1,4 @@
-name: SAST Scan 
+name: SAST Scan
 
 on:
   push:
@@ -9,28 +9,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout your repo
+      # Checkout THIS repo
       - name: Checkout repo
         uses: actions/checkout@v6
-
-      # Pull VulnerableApp
-      - name: Clone VulnerableApp
-        run: |
-          git clone --depth=1 https://github.com/SasanLabs/VulnerableApp
 
       # Install dependencies
       - name: Install tools
         run: |
           pip install semgrep
 
-      # Run Semgrep scan
+      # Run Semgrep scan against this repository
       - name: Run Semgrep
         run: |
           mkdir -p output
           semgrep scan \
             --config=p/owasp-top-ten \
             --json \
-            ./WebGoat > output/results.json
+            . > output/results.json
 
       # Generate HTML dashboard
       - name: Generate HTML report
