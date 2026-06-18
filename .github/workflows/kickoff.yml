@@ -13,8 +13,8 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v6
 
-      # Pull WebGoat 
-      - name: Clone WebGoat
+      # Pull VulnerableApp
+      - name: Clone VulnerableApp
         run: |
           git clone --depth=1 https://github.com/SasanLabs/VulnerableApp
 
