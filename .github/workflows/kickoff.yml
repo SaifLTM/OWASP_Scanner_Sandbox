@@ -16,7 +16,7 @@ jobs:
       # Pull WebGoat 
       - name: Clone WebGoat
         run: |
-          git clone --depth=1 https://github.com/WebGoat/WebGoat.git
+          git clone --depth=1 https://github.com/SasanLabs/VulnerableApp
 
       # Install dependencies
       - name: Install tools
