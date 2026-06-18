@@ -9,23 +9,28 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout THIS repo
+      # Checkout your repo
       - name: Checkout repo
         uses: actions/checkout@v6
+
+      # Pull WebGoat
+      - name: Clone WebGoat
+        run: |
+          git clone --depth=1 https://github.com/WebGoat/WebGoat.git
 
       # Install dependencies
       - name: Install tools
         run: |
           pip install semgrep
 
-      # Run Semgrep scan against this repository
+      # Run Semgrep scan
       - name: Run Semgrep
         run: |
           mkdir -p output
           semgrep scan \
             --config=p/owasp-top-ten \
             --json \
-            . > output/results.json
+            ./WebGoat > output/results.json
 
       # Generate HTML dashboard
       - name: Generate HTML report
