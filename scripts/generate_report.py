@@ -341,10 +341,10 @@ html_output = f"""
 
     <div class="topbar">
       <div>
-        <h1>🔒 SAST Security Dashboard</h1>
-        <div class="subtitle">Semgrep findings for WebGoat with clickable GitHub file links</div>
+        <h1>SAST Security Dashboard</h1>
+        <div class="subtitle">Semgrep findings for WebGoat</div>
       </div>
-      <button class="toggle-btn" onclick="toggleTheme()">🌙 Toggle Dark Mode</button>
+      <button class="toggle-btn" onclick="toggleTheme()"> Toggle Dark Mode</button>
     </div>
 
     <div class="summary-grid">
@@ -367,7 +367,7 @@ html_output = f"""
     </div>
 
     <div class="panel">
-      <h2>📊 Vulnerability Severity Graph</h2>
+      <h2>Vulnerability Severity Graph</h2>
       <div class="chart-wrap">
         <div class="bar-row">
           <div class="bar-header">
@@ -413,7 +413,7 @@ html_output = f"""
     </div>
 
     <div class="panel">
-      <h2>🔎 Search Findings</h2>
+      <h2>Search Findings</h2>
       <div class="controls">
         <input type="text" id="search" class="search-input" placeholder="Search findings by rule, file, CWE, OWASP, or description...">
       </div>
@@ -452,7 +452,7 @@ for finding in findings:
       <p class="meta">
         <b>Remediation:</b><br>
         <a class="rule-link" href="{html.escape(str(finding['rule_url']))}" target="_blank">
-          🔧 View Fix Guidance
+           View Fix Guidance
         </a>
       </p>
     </div>
