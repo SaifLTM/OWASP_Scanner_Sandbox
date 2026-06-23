@@ -1,4 +1,4 @@
-name: SAST Scan
+name: SAST + GraphQL Scan
 
 on:
   push:
@@ -9,35 +9,50 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout your repo
-      - name: Checkout repo
-        uses: actions/checkout@v6
+      # 1. Checkout repo
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      # Pull WebGoat
+      # 2. Clone WebGoat (target app)
       - name: Clone WebGoat
         run: |
           git clone --depth=1 https://github.com/WebGoat/WebGoat.git
 
-      # Install dependencies
-      - name: Install tools
+      # 3. Install Python + tools
+      - name: Install dependencies
         run: |
-          pip install semgrep
+          python3 -m pip install --upgrade pip
+          pip install semgrep gqlmap
 
-      # Run Semgrep scan
-      - name: Run Semgrep
+      # 4. Run Semgrep (SAST + GraphQL rules)
+      - name: Run Semgrep scan
         run: |
           mkdir -p output
           semgrep scan \
             --config=p/owasp-top-ten \
+            --config=p/graphql \
             --json \
             ./WebGoat > output/results.json
 
-      # Generate HTML dashboard
+      # 5. Start WebGoat (for runtime GraphQL testing)
+      - name: Run WebGoat container
+        run: |
+          docker run -d -p 8080:8080 webgoat/webgoat
+          echo "Waiting for WebGoat to start..."
+          sleep 60
+
+      # 6. Run GraphQL runtime scan (optional but powerful)
+      - name: Run GraphQL scan (gqlmap)
+        run: |
+          gqlmap -u http://localhost:8080/WebGoat/graphql \
+            --json > output/graphql-results.json || true
+
+      # 7. Generate HTML dashboard
       - name: Generate HTML report
         run: |
           python3 scripts/generate_report.py
 
-      # Upload report
+      # 8. Upload dashboard as artifact
       - name: Upload dashboard
         uses: actions/upload-artifact@v4
         with:
