@@ -14,7 +14,6 @@ def make_github_file_url(path, line=None):
     if normalized.startswith("./"):
         normalized = normalized[2:]
 
-    # Build GitHub link for the current repository and commit
     github_server_url = os.getenv("GITHUB_SERVER_URL", "https://github.com")
     github_repository = os.getenv("GITHUB_REPOSITORY", "")
     github_sha = os.getenv("GITHUB_SHA", "main")
@@ -32,12 +31,14 @@ def make_github_file_url(path, line=None):
 
 def normalize(sev):
     sev = str(sev).upper()
+
     if sev in ["ERROR", "HIGH"]:
         return "HIGH"
     elif sev in ["WARNING", "MEDIUM"]:
         return "MEDIUM"
     elif sev in ["INFO", "LOW", "NOTE"]:
         return "LOW"
+
     return "UNKNOWN"
 
 
@@ -50,6 +51,7 @@ def codeql_severity_from_result(result, rule_meta):
     if security_severity is not None:
         try:
             score = float(security_severity)
+
             if score >= 7.0:
                 return "HIGH"
             elif score >= 4.0:
@@ -60,6 +62,7 @@ def codeql_severity_from_result(result, rule_meta):
             pass
 
     problem_severity = props.get("problem.severity")
+
     if problem_severity:
         return normalize(problem_severity)
 
@@ -81,37 +84,48 @@ def extract_codeql_cwe(rule):
     return "N/A"
 
 
+def safe_text(value):
+    return html.escape(str(value if value is not None else ""))
+
+
+os.makedirs("output", exist_ok=True)
+
+findings = []
+
+
 # -------------------------------
 # Load Semgrep results
 # -------------------------------
-with open("output/results.json", encoding="utf-8") as f:
-    data = json.load(f)
+try:
+    with open("output/results.json", encoding="utf-8") as f:
+        data = json.load(f)
 
-results = data.get("results", [])
-findings = []
+    results = data.get("results", [])
 
-# Extract Semgrep fields
-for r in results:
-    rule_id = r.get("check_id")
-    meta = r.get("extra", {}).get("metadata", {})
-    file_path = r.get("path")
-    line_number = r.get("start", {}).get("line")
+    for r in results:
+        rule_id = r.get("check_id", "semgrep_rule")
+        meta = r.get("extra", {}).get("metadata", {})
+        file_path = r.get("path", "")
+        line_number = r.get("start", {}).get("line", "")
 
-    rule_url = f"https://semgrep.dev/r?q={rule_id}"
-    github_file_url = make_github_file_url(file_path, line_number)
+        rule_url = f"https://semgrep.dev/r?q={rule_id}"
+        github_file_url = make_github_file_url(file_path, line_number)
 
-    findings.append({
-        "source": "Semgrep",
-        "rule_id": rule_id,
-        "file": file_path,
-        "line": line_number,
-        "severity": r.get("extra", {}).get("severity", "UNKNOWN"),
-        "description": r.get("extra", {}).get("message", ""),
-        "cwe": meta.get("cwe", "N/A"),
-        "owasp": meta.get("owasp", "N/A"),
-        "rule_url": rule_url,
-        "github_file_url": github_file_url
-    })
+        findings.append({
+            "source": "Semgrep",
+            "rule_id": rule_id,
+            "file": file_path,
+            "line": line_number,
+            "severity": r.get("extra", {}).get("severity", "UNKNOWN"),
+            "description": r.get("extra", {}).get("message", ""),
+            "cwe": meta.get("cwe", "N/A"),
+            "owasp": meta.get("owasp", "N/A"),
+            "rule_url": rule_url,
+            "github_file_url": github_file_url
+        })
+
+except Exception as e:
+    print(f"Failed to load Semgrep results: {e}")
 
 
 # -------------------------------
@@ -194,28 +208,33 @@ for sarif_file in codeql_sarif_files:
         print(f"Failed to parse CodeQL SARIF file {sarif_file}: {e}")
 
 
-# Normalize severity
+# -------------------------------
+# Normalize and summarize
+# -------------------------------
 for finding in findings:
     finding["severity"] = normalize(finding["severity"])
 
-# Sort by severity
 priority = {"HIGH": 1, "MEDIUM": 2, "LOW": 3, "UNKNOWN": 4}
 findings.sort(key=lambda x: priority.get(x["severity"], 4))
 
-# Summary counts
 counts = Counter(f["severity"] for f in findings)
+
 high_count = counts.get("HIGH", 0)
 medium_count = counts.get("MEDIUM", 0)
 low_count = counts.get("LOW", 0)
 unknown_count = counts.get("UNKNOWN", 0)
 
 source_counts = Counter(f["source"] for f in findings)
+
 semgrep_count = source_counts.get("Semgrep", 0)
 codeql_count = source_counts.get("CodeQL", 0)
 
 max_count = max(high_count, medium_count, low_count, unknown_count, 1)
 
+
+# -------------------------------
 # Generate HTML
+# -------------------------------
 html_output = f"""
 <!DOCTYPE html>
 <html lang="en">
@@ -436,13 +455,15 @@ html_output = f"""
       line-height: 1.5;
     }}
 
-    .github-link, .rule-link {{
+    .github-link,
+    .rule-link {{
       color: var(--link);
       text-decoration: none;
       word-break: break-word;
     }}
 
-    .github-link:hover, .rule-link:hover {{
+    .github-link:hover,
+    .rule-link:hover {{
       text-decoration: underline;
     }}
 
@@ -493,22 +514,27 @@ html_output = f"""
         <div class="summary-label">High</div>
         <div class="summary-value high-text">{high_count}</div>
       </div>
+
       <div class="summary-card">
         <div class="summary-label">Medium</div>
         <div class="summary-value medium-text">{medium_count}</div>
       </div>
+
       <div class="summary-card">
         <div class="summary-label">Low</div>
         <div class="summary-value low-text">{low_count}</div>
       </div>
+
       <div class="summary-card">
         <div class="summary-label">Unknown</div>
         <div class="summary-value unknown-text">{unknown_count}</div>
       </div>
+
       <div class="summary-card">
         <div class="summary-label">Semgrep Findings</div>
         <div class="summary-value">{semgrep_count}</div>
       </div>
+
       <div class="summary-card">
         <div class="summary-label">CodeQL Findings</div>
         <div class="summary-value">{codeql_count}</div>
@@ -517,6 +543,7 @@ html_output = f"""
 
     <div class="panel">
       <h2>Vulnerability Severity Graph</h2>
+
       <div class="chart-wrap">
         <div class="bar-row">
           <div class="bar-header">
@@ -558,64 +585,79 @@ html_output = f"""
           </div>
         </div>
       </div>
-      <div class="footer-note">The bar lengths are scaled relative to the largest severity count.</div>
+
+      <div class="footer-note">
+        The bar lengths are scaled relative to the largest severity count.
+      </div>
     </div>
 
     <div class="panel">
       <h2>Search Findings</h2>
       <div class="controls">
-        <input type="text" id="search" class="search-input" placeholder="Search findings by source, rule, file, CWE, OWASP, or description...">
+        <input
+          type="text"
+          id="search"
+          class="search-input"
+          placeholder="Search findings by source, rule, file, CWE, OWASP, or description..."
+        >
       </div>
     </div>
 """
 
+
+# -------------------------------
 # Render findings
+# -------------------------------
 for finding in findings:
     severity_class = f"{finding['severity'].lower()}-text"
 
     html_output += f"""
     <div class="card">
       <h2 class="finding-title {severity_class}">
-        [{html.escape(str(finding['severity']))}] {html.escape(str(finding['rule_id']))}
-        <span class="source-pill">{html.escape(str(finding['source']))}</span>
+        [{safe_text(finding['severity'])}] {safe_text(finding['rule_id'])}
+        <span class="source-pill">{safe_text(finding['source'])}</span>
       </h2>
 
       <p class="meta">
         <b>Impacted File:</b>
-        }" target="_blank">
-          {html.escape(str(finding['file']))}:{html.escape(str(finding['line']))}
+        <a class="github-link" href="{safe_text(finding['github_file_url'])}" target="_blank">
+          {safe_text(finding['file'])}:{safe_text(finding['line'])}
         </a>
       </p>
 
       <p class="meta">
-        <b>Description:</b> {html.escape(str(finding['description']))}
+        <b>Description:</b> {safe_text(finding['description'])}
       </p>
 
       <p class="meta">
-        <b>CWE:</b> {html.escape(str(finding['cwe']))}
-        <span class="pill">{html.escape(str(finding['severity']))}</span>
+        <b>CWE:</b> {safe_text(finding['cwe'])}
+        <span class="pill">{safe_text(finding['severity'])}</span>
       </p>
 
       <p class="meta">
-        <b>OWASP / Source Category:</b> {html.escape(str(finding['owasp']))}
+        <b>OWASP / Source Category:</b> {safe_text(finding['owasp'])}
       </p>
 
       <p class="meta">
         <b>Remediation:</b><br>
-        }" target="_blank">
-           View Fix Guidance
+        <a class="rule-link" href="{safe_text(finding['rule_url'])}" target="_blank">
+          View Fix Guidance
         </a>
       </p>
     </div>
     """
 
+
+# -------------------------------
 # Add scripts and close HTML
+# -------------------------------
 html_output += """
   </div>
 
   <script>
     function applySavedTheme() {
       const savedTheme = localStorage.getItem("theme");
+
       if (savedTheme === "dark") {
         document.body.classList.add("dark");
       }
@@ -623,16 +665,18 @@ html_output += """
 
     function toggleTheme() {
       document.body.classList.toggle("dark");
+
       const isDark = document.body.classList.contains("dark");
       localStorage.setItem("theme", isDark ? "dark" : "light");
     }
 
     applySavedTheme();
 
-    document.getElementById('search').addEventListener('input', function(e) {
+    document.getElementById("search").addEventListener("input", function(e) {
       let term = e.target.value.toLowerCase();
-      document.querySelectorAll('.card').forEach(card => {
-        card.style.display = card.innerText.toLowerCase().includes(term) ? '' : 'none';
+
+      document.querySelectorAll(".card").forEach(card => {
+        card.style.display = card.innerText.toLowerCase().includes(term) ? "" : "none";
       });
     });
   </script>
@@ -640,7 +684,7 @@ html_output += """
 </html>
 """
 
-# Save file
+
 with open("output/security-report.html", "w", encoding="utf-8") as f:
     f.write(html_output)
 

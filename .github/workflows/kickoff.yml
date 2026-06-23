@@ -43,23 +43,20 @@ jobs:
 
       - name: Show generated scan files
         run: |
-          echo "Generated files:"
+          echo "Generated scan files:"
           find output -type f || true
 
       - name: Generate HTML report
         run: |
           python3 scripts/generate_report.py
 
+      - name: Show final output files
+        run: |
+          echo "Final output files:"
+          find output -type f || true
+
       - name: Upload HTML dashboard
         uses: actions/upload-artifact@v4
         with:
           name: sast-dashboard
           path: output/security-report.html
-
-      - name: Upload raw SAST results
-        uses: actions/upload-artifact@v4
-        with:
-          name: raw-sast-results
-          path: |
-            output/results.json
-            output/codeql-results
