@@ -17,6 +17,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Checkout WebGoat repo
+        run: |
+          git clone --depth=1 https://github.com/WebGoat/WebGoat.git
+
       - name: Install Semgrep
         run: |
           python3 -m pip install --upgrade pip
@@ -28,13 +32,15 @@ jobs:
           semgrep scan \
             --config=p/owasp-top-ten \
             --json \
-            . > output/results.json
+            ./WebGoat > output/results.json
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
-          languages: python
+          languages: java
           queries: security-extended,security-and-quality
+          source-root: ./WebGoat
+          build-mode: none
 
       - name: Run CodeQL analysis
         uses: github/codeql-action/analyze@v3
