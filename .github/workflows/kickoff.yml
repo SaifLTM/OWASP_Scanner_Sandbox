@@ -1,4 +1,4 @@
-name: SAST (Semgrep + CodeQL + HTML)
+name: SAST Scan
 
 on:
   push:
@@ -11,19 +11,17 @@ jobs:
     permissions:
       contents: read
       security-events: write
+      actions: read
 
     steps:
-      # ✅ 1. Checkout repo
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ✅ 2. Install Semgrep
       - name: Install Semgrep
         run: |
           python3 -m pip install --upgrade pip
           pip install semgrep
 
-      # ✅ 3. Run Semgrep scan
       - name: Run Semgrep
         run: |
           mkdir -p output
@@ -32,24 +30,36 @@ jobs:
             --json \
             . > output/results.json
 
-      # ✅ 4. Initialize CodeQL (auto-detect languages)
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
+        with:
+          languages: python
+          queries: security-extended,security-and-quality
 
-      # ✅ 5. Run CodeQL + FORCE FILE OUTPUT (FIXED)
       - name: Run CodeQL analysis
         uses: github/codeql-action/analyze@v3
         with:
-          output: output/codeql-results.sarif   # ✅ FIX: Force file, not folder
+          output: output/codeql-results
 
-      # ✅ 6. Generate HTML report (combined)
-      - name: Generate dashboard
+      - name: Show generated scan files
+        run: |
+          echo "Generated files:"
+          find output -type f || true
+
+      - name: Generate HTML report
         run: |
           python3 scripts/generate_report.py
 
-      # ✅ 7. Upload HTML
-      - name: Upload report
+      - name: Upload HTML dashboard
         uses: actions/upload-artifact@v4
         with:
           name: sast-dashboard
           path: output/security-report.html
+
+      - name: Upload raw SAST results
+        uses: actions/upload-artifact@v4
+        with:
+          name: raw-sast-results
+          path: |
+            output/results.json
+            output/codeql-results
