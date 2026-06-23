@@ -1,15 +1,19 @@
-name: SAST + GraphQL Scan
+name: SAST (Semgrep + CodeQL)
 
 on:
   push:
   pull_request:
 
 jobs:
-  sast:
+  security:
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: read
+      security-events: write
+
     steps:
-      # 1. Checkout repo
+      # 1. Checkout your repo
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -18,42 +22,50 @@ jobs:
         run: |
           git clone --depth=1 https://github.com/WebGoat/WebGoat.git
 
-      # 3. Install Python + tools
-      - name: Install dependencies
+      # -----------------------------
+      # ✅ SEMGREP (HTML DASHBOARD)
+      # -----------------------------
+
+      - name: Install Semgrep
         run: |
           python3 -m pip install --upgrade pip
-          pip install semgrep gqlmap
+          pip install semgrep
 
-      # 4. Run Semgrep (SAST + GraphQL rules)
       - name: Run Semgrep scan
         run: |
           mkdir -p output
           semgrep scan \
             --config=p/owasp-top-ten \
-            --config=p/graphql \
             --json \
             ./WebGoat > output/results.json
 
-      # 5. Start WebGoat (for runtime GraphQL testing)
-      - name: Run WebGoat container
-        run: |
-          docker run -d -p 8080:8080 webgoat/webgoat
-          echo "Waiting for WebGoat to start..."
-          sleep 60
-
-      # 6. Run GraphQL runtime scan (optional but powerful)
-      - name: Run GraphQL scan (gqlmap)
-        run: |
-          gqlmap -u http://localhost:8080/WebGoat/graphql \
-            --json > output/graphql-results.json || true
-
-      # 7. Generate HTML dashboard
       - name: Generate HTML report
         run: |
           python3 scripts/generate_report.py
 
-      # 8. Upload dashboard as artifact
-      - name: Upload dashboard
+      # -----------------------------
+      # ✅ CODEQL SCAN
+      # -----------------------------
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: java
+          source-root: ./WebGoat
+
+      - name: Build WebGoat
+        run: |
+          cd WebGoat
+          mvn clean install -DskipTests
+
+      - name: Run CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+
+      # -----------------------------
+      # ✅ UPLOAD HTML DASHBOARD
+      # -----------------------------
+
+      - name: Upload HTML dashboard
         uses: actions/upload-artifact@v4
         with:
           name: sast-dashboard
