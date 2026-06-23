@@ -58,6 +58,52 @@ for r in results:
         "github_file_url": github_file_url
     })
 
+# -------------------------------
+# Load CodeQL SARIF results
+# -------------------------------
+try:
+    with open("output/codeql.sarif") as f:
+        codeql_data = json.load(f)
+
+    for run in codeql_data.get("runs", []):
+        for result in run.get("results", []):
+
+            rule_id = result.get("ruleId", "codeql_rule")
+            message = result.get("message", {}).get("text", "")
+
+            locations = result.get("locations", [])
+            file_path = ""
+            line_number = ""
+
+            if locations:
+                physical = locations[0].get("physicalLocation", {})
+                file_path = physical.get("artifactLocation", {}).get("uri", "")
+                line_number = physical.get("region", {}).get("startLine", "")
+
+            # Map CodeQL severity → your format
+            level = result.get("level", "warning").upper()
+
+            if level == "ERROR":
+                severity = "HIGH"
+            elif level == "WARNING":
+                severity = "MEDIUM"
+            else:
+                severity = "LOW"
+
+            findings.append({
+                "rule_id": rule_id,
+                "file": file_path,
+                "line": line_number,
+                "severity": severity,
+                "description": message,
+                "cwe": "N/A",
+                "owasp": "CodeQL",
+                "rule_url": "#",
+                "github_file_url": make_github_file_url(file_path, line_number)
+            })
+
+except Exception as e:
+    print("No CodeQL results found:", e)
 
 # Normalize severity
 def normalize(sev):
