@@ -1,27 +1,28 @@
 import json
 import html
+import os
+import glob
 from collections import Counter
 
-WEBGOAT_REPO_URL = "https://github.com/WebGoat/WebGoat"
-WEBGOAT_BRANCH = "main"
 
 def make_github_file_url(path, line=None):
     if not path:
         return "#"
 
-    normalized = path.replace("\\", "/")
+    normalized = str(path).replace("\\", "/")
 
     if normalized.startswith("./"):
         normalized = normalized[2:]
 
-    if normalized.startswith("WebGoat/"):
-        normalized = normalized[len("WebGoat/"):]
+    # Build GitHub link for the current repository and commit
+    github_server_url = os.getenv("GITHUB_SERVER_URL", "https://github.com")
+    github_repository = os.getenv("GITHUB_REPOSITORY", "")
+    github_sha = os.getenv("GITHUB_SHA", "main")
 
-    marker = "/WebGoat/"
-    if marker in normalized:
-        normalized = normalized.split(marker, 1)[1]
+    if not github_repository:
+        return "#"
 
-    url = f"{WEBGOAT_REPO_URL}/blob/{WEBGOAT_BRANCH}/{normalized}"
+    url = f"{github_server_url}/{github_repository}/blob/{github_sha}/{normalized}"
 
     if line:
         url += f"#L{line}"
@@ -29,14 +30,67 @@ def make_github_file_url(path, line=None):
     return url
 
 
+def normalize(sev):
+    sev = str(sev).upper()
+    if sev in ["ERROR", "HIGH"]:
+        return "HIGH"
+    elif sev in ["WARNING", "MEDIUM"]:
+        return "MEDIUM"
+    elif sev in ["INFO", "LOW", "NOTE"]:
+        return "LOW"
+    return "UNKNOWN"
+
+
+def codeql_severity_from_result(result, rule_meta):
+    rule_id = result.get("ruleId", "")
+    props = rule_meta.get(rule_id, {}).get("properties", {})
+
+    security_severity = props.get("security-severity")
+
+    if security_severity is not None:
+        try:
+            score = float(security_severity)
+            if score >= 7.0:
+                return "HIGH"
+            elif score >= 4.0:
+                return "MEDIUM"
+            else:
+                return "LOW"
+        except ValueError:
+            pass
+
+    problem_severity = props.get("problem.severity")
+    if problem_severity:
+        return normalize(problem_severity)
+
+    level = result.get("level", "warning")
+    return normalize(level)
+
+
+def extract_codeql_cwe(rule):
+    tags = rule.get("properties", {}).get("tags", [])
+
+    for tag in tags:
+        tag = str(tag).lower()
+
+        if tag.startswith("external/cwe/"):
+            cwe_part = tag.split("/")[-1]
+            cwe_part = cwe_part.replace("cwe-", "").upper()
+            return f"CWE-{cwe_part}"
+
+    return "N/A"
+
+
+# -------------------------------
 # Load Semgrep results
-with open("output/results.json") as f:
+# -------------------------------
+with open("output/results.json", encoding="utf-8") as f:
     data = json.load(f)
 
 results = data.get("results", [])
 findings = []
 
-# Extract fields + generate Semgrep rule link + GitHub file link
+# Extract Semgrep fields
 for r in results:
     rule_id = r.get("check_id")
     meta = r.get("extra", {}).get("metadata", {})
@@ -47,6 +101,7 @@ for r in results:
     github_file_url = make_github_file_url(file_path, line_number)
 
     findings.append({
+        "source": "Semgrep",
         "rule_id": rule_id,
         "file": file_path,
         "line": line_number,
@@ -58,71 +113,94 @@ for r in results:
         "github_file_url": github_file_url
     })
 
+
 # -------------------------------
 # Load CodeQL SARIF results
 # -------------------------------
-try:
-    with open("output/codeql.sarif") as f:
-        codeql_data = json.load(f)
+codeql_sarif_files = []
 
-    for run in codeql_data.get("runs", []):
-        for result in run.get("results", []):
+codeql_sarif_files.extend(
+    glob.glob("output/codeql-results/**/*.sarif", recursive=True)
+)
 
-            rule_id = result.get("ruleId", "codeql_rule")
-            message = result.get("message", {}).get("text", "")
+codeql_sarif_files.extend(
+    glob.glob("output/codeql-results/**/*.sarif.json", recursive=True)
+)
 
-            locations = result.get("locations", [])
-            file_path = ""
-            line_number = ""
+if not codeql_sarif_files:
+    print("No CodeQL SARIF files found in output/codeql-results")
+else:
+    print("CodeQL SARIF files found:")
+    for sarif_file in codeql_sarif_files:
+        print(f" - {sarif_file}")
 
-            if locations:
-                physical = locations[0].get("physicalLocation", {})
-                file_path = physical.get("artifactLocation", {}).get("uri", "")
-                line_number = physical.get("region", {}).get("startLine", "")
+for sarif_file in codeql_sarif_files:
+    try:
+        with open(sarif_file, encoding="utf-8") as f:
+            codeql_data = json.load(f)
 
-            # Map CodeQL severity → your format
-            level = result.get("level", "warning").upper()
+        for run in codeql_data.get("runs", []):
+            rule_meta = {}
 
-            if level == "ERROR":
-                severity = "HIGH"
-            elif level == "WARNING":
-                severity = "MEDIUM"
-            else:
-                severity = "LOW"
+            for rule in run.get("tool", {}).get("driver", {}).get("rules", []):
+                rule_id = rule.get("id", "")
 
-            findings.append({
-                "rule_id": rule_id,
-                "file": file_path,
-                "line": line_number,
-                "severity": severity,
-                "description": message,
-                "cwe": "N/A",
-                "owasp": "CodeQL",
-                "rule_url": "#",
-                "github_file_url": make_github_file_url(file_path, line_number)
-            })
+                rule_meta[rule_id] = {
+                    "name": rule.get("name", ""),
+                    "help_uri": rule.get("helpUri", "#"),
+                    "short_description": rule.get("shortDescription", {}).get("text", ""),
+                    "full_description": rule.get("fullDescription", {}).get("text", ""),
+                    "cwe": extract_codeql_cwe(rule),
+                    "properties": rule.get("properties", {})
+                }
 
-except Exception as e:
-    print("No CodeQL results found:", e)
+            for result in run.get("results", []):
+                rule_id = result.get("ruleId", "codeql_rule")
+
+                message = result.get("message", {}).get("text", "")
+
+                if not message:
+                    message = rule_meta.get(rule_id, {}).get("short_description", "")
+
+                file_path = ""
+                line_number = ""
+
+                locations = result.get("locations", [])
+
+                if locations:
+                    physical = locations[0].get("physicalLocation", {})
+                    file_path = physical.get("artifactLocation", {}).get("uri", "")
+                    line_number = physical.get("region", {}).get("startLine", "")
+
+                severity = codeql_severity_from_result(result, rule_meta)
+                rule_url = rule_meta.get(rule_id, {}).get("help_uri", "#")
+                cwe = rule_meta.get(rule_id, {}).get("cwe", "N/A")
+                github_file_url = make_github_file_url(file_path, line_number)
+
+                findings.append({
+                    "source": "CodeQL",
+                    "rule_id": f"CodeQL: {rule_id}",
+                    "file": file_path,
+                    "line": line_number,
+                    "severity": severity,
+                    "description": message,
+                    "cwe": cwe,
+                    "owasp": "CodeQL",
+                    "rule_url": rule_url,
+                    "github_file_url": github_file_url
+                })
+
+    except Exception as e:
+        print(f"Failed to parse CodeQL SARIF file {sarif_file}: {e}")
+
 
 # Normalize severity
-def normalize(sev):
-    sev = str(sev).upper()
-    if sev in ["ERROR", "HIGH"]:
-        return "HIGH"
-    elif sev in ["WARNING", "MEDIUM"]:
-        return "MEDIUM"
-    elif sev in ["INFO", "LOW"]:
-        return "LOW"
-    return "UNKNOWN"
-
-
 for finding in findings:
     finding["severity"] = normalize(finding["severity"])
 
 # Sort by severity
 priority = {"HIGH": 1, "MEDIUM": 2, "LOW": 3, "UNKNOWN": 4}
-findings.sort(key=lambda x: priority[x["severity"]])
+findings.sort(key=lambda x: priority.get(x["severity"], 4))
 
 # Summary counts
 counts = Counter(f["severity"] for f in findings)
@@ -131,7 +209,11 @@ medium_count = counts.get("MEDIUM", 0)
 low_count = counts.get("LOW", 0)
 unknown_count = counts.get("UNKNOWN", 0)
 
-max_count = max(high_count, medium_count, low_count, 1)
+source_counts = Counter(f["source"] for f in findings)
+semgrep_count = source_counts.get("Semgrep", 0)
+codeql_count = source_counts.get("CodeQL", 0)
+
+max_count = max(high_count, medium_count, low_count, unknown_count, 1)
 
 # Generate HTML
 html_output = f"""
@@ -375,6 +457,19 @@ html_output = f"""
       border: 1px solid var(--border);
     }}
 
+    .source-pill {{
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.84rem;
+      font-weight: bold;
+      margin-left: 8px;
+      vertical-align: middle;
+      background: rgba(37, 99, 235, 0.12);
+      color: var(--link);
+      border: 1px solid var(--border);
+    }}
+
     .footer-note {{
       color: var(--muted);
       margin-top: 8px;
@@ -388,9 +483,9 @@ html_output = f"""
     <div class="topbar">
       <div>
         <h1>SAST Security Dashboard</h1>
-        <div class="subtitle">Semgrep findings for WebGoat</div>
+        <div class="subtitle">Combined Semgrep and CodeQL findings</div>
       </div>
-      <button class="toggle-btn" onclick="toggleTheme()"> Toggle Dark Mode</button>
+      <button class="toggle-btn" onclick="toggleTheme()">Toggle Dark Mode</button>
     </div>
 
     <div class="summary-grid">
@@ -409,6 +504,14 @@ html_output = f"""
       <div class="summary-card">
         <div class="summary-label">Unknown</div>
         <div class="summary-value unknown-text">{unknown_count}</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-label">Semgrep Findings</div>
+        <div class="summary-value">{semgrep_count}</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-label">CodeQL Findings</div>
+        <div class="summary-value">{codeql_count}</div>
       </div>
     </div>
 
@@ -461,7 +564,7 @@ html_output = f"""
     <div class="panel">
       <h2>Search Findings</h2>
       <div class="controls">
-        <input type="text" id="search" class="search-input" placeholder="Search findings by rule, file, CWE, OWASP, or description...">
+        <input type="text" id="search" class="search-input" placeholder="Search findings by source, rule, file, CWE, OWASP, or description...">
       </div>
     </div>
 """
@@ -469,15 +572,17 @@ html_output = f"""
 # Render findings
 for finding in findings:
     severity_class = f"{finding['severity'].lower()}-text"
+
     html_output += f"""
     <div class="card">
       <h2 class="finding-title {severity_class}">
         [{html.escape(str(finding['severity']))}] {html.escape(str(finding['rule_id']))}
+        <span class="source-pill">{html.escape(str(finding['source']))}</span>
       </h2>
 
       <p class="meta">
         <b>Impacted File:</b>
-        <a class="github-link" href="{html.escape(str(finding['github_file_url']))}" target="_blank">
+        }" target="_blank">
           {html.escape(str(finding['file']))}:{html.escape(str(finding['line']))}
         </a>
       </p>
@@ -492,12 +597,12 @@ for finding in findings:
       </p>
 
       <p class="meta">
-        <b>OWASP:</b> {html.escape(str(finding['owasp']))}
+        <b>OWASP / Source Category:</b> {html.escape(str(finding['owasp']))}
       </p>
 
       <p class="meta">
         <b>Remediation:</b><br>
-        <a class="rule-link" href="{html.escape(str(finding['rule_url']))}" target="_blank">
+        }" target="_blank">
            View Fix Guidance
         </a>
       </p>
