@@ -13,17 +13,17 @@ jobs:
       security-events: write
 
     steps:
-      # ✅ Checkout
+      # ✅ 1. Checkout repo
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ✅ Install Semgrep
+      # ✅ 2. Install Semgrep
       - name: Install Semgrep
         run: |
           python3 -m pip install --upgrade pip
           pip install semgrep
 
-      # ✅ Run Semgrep
+      # ✅ 3. Run Semgrep scan
       - name: Run Semgrep
         run: |
           mkdir -p output
@@ -32,22 +32,22 @@ jobs:
             --json \
             . > output/results.json
 
-      # ✅ Setup CodeQL (AUTO-DETECT LANGUAGES)
+      # ✅ 4. Initialize CodeQL (auto-detect languages)
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
 
-      # ✅ Run CodeQL and export SARIF
+      # ✅ 5. Run CodeQL + FORCE FILE OUTPUT (FIXED)
       - name: Run CodeQL analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
-          output: output/codeql.sarif
+          output: output/codeql-results.sarif   # ✅ FIX: Force file, not folder
 
-      # ✅ Generate HTML report
+      # ✅ 6. Generate HTML report (combined)
       - name: Generate dashboard
         run: |
           python3 scripts/generate_report.py
 
-      # ✅ Upload HTML
+      # ✅ 7. Upload HTML
       - name: Upload report
         uses: actions/upload-artifact@v4
         with:
