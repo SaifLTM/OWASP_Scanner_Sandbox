@@ -4,7 +4,6 @@ import os
 import glob
 from collections import Counter
 
-
 def make_github_file_url(path, line=None):
     if not path:
         return "#"
@@ -14,20 +13,29 @@ def make_github_file_url(path, line=None):
     if normalized.startswith("./"):
         normalized = normalized[2:]
 
+    # Remove cloned repo folder prefix from scanner output paths
+    repo_folder = "OWASP_Insecure_Application/"
+    if normalized.startswith(repo_folder):
+        normalized = normalized[len(repo_folder):]
+
     github_server_url = os.getenv("GITHUB_SERVER_URL", "https://github.com")
-    github_repository = os.getenv("GITHUB_REPOSITORY", "")
-    github_sha = os.getenv("GITHUB_SHA", "main")
 
-    if not github_repository:
-        return "#"
+    # IMPORTANT:
+    # Use the scanned repo, not the repo running the workflow
+    scanned_repository = os.getenv(
+        "SCAN_REPOSITORY",
+        "baigsf/OWASP_Insecure_Application"
+    )
 
-    url = f"{github_server_url}/{github_repository}/blob/{github_sha}/{normalized}"
+    # Use scanned repo commit SHA if available, otherwise main
+    scanned_ref = os.getenv("SCAN_REPO_SHA", "main")
+
+    url = f"{github_server_url}/{scanned_repository}/blob/{scanned_ref}/{normalized}"
 
     if line:
         url += f"#L{line}"
 
     return url
-
 
 def normalize(sev):
     sev = str(sev).upper()

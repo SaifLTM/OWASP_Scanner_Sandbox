@@ -20,6 +20,8 @@ jobs:
       - name: Checkout OWASP Insecure Application repo
         run: |
           git clone --depth=1 https://github.com/baigsf/OWASP_Insecure_Application
+          echo "SCAN_REPOSITORY=baigsf/OWASP_Insecure_Application" >> $GITHUB_ENV
+          echo "SCAN_REPO_SHA=$(git -C OWASP_Insecure_Application rev-parse HEAD)" >> $GITHUB_ENV
 
       - name: Install Semgrep
         run: |
@@ -37,7 +39,7 @@ jobs:
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
-          languages: java
+          languages: java, javascript, python
           queries: security-extended,security-and-quality
           source-root: ./OWASP_Insecure_Application
           build-mode: none
