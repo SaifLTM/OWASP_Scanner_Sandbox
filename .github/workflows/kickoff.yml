@@ -19,7 +19,7 @@ jobs:
 
       - name: Checkout WebGoat repo
         run: |
-          git clone --depth=1 https://github.com/WebGoat/WebGoat.git
+          git clone --depth=1 https://github.com/baigsf/OWASP_Insecure_Application
 
       - name: Install Semgrep
         run: |
