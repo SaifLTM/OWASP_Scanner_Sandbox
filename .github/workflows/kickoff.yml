@@ -17,7 +17,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Checkout WebGoat repo
+      - name: Checkout OWASP Insecure Application repo
         run: |
           git clone --depth=1 https://github.com/baigsf/OWASP_Insecure_Application
 
@@ -32,14 +32,14 @@ jobs:
           semgrep scan \
             --config=p/owasp-top-ten \
             --json \
-            ./WebGoat > output/results.json
+            ./OWASP_Insecure_Application > output/results.json
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
           languages: java
           queries: security-extended,security-and-quality
-          source-root: ./WebGoat
+          source-root: ./OWASP_Insecure_Application
           build-mode: none
 
       - name: Run CodeQL analysis
