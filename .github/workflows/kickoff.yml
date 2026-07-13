@@ -19,14 +19,14 @@ jobs:
 
       - name: Checkout OWASP Insecure Application repo
         run: |
-          git clone --depth=1 https://github.com/baigsf/OWASP_Insecure_Application
+          git clone --depth=1 https://github.com/baigsf/OWASP_Insecure_Application.git
           echo "SCAN_REPOSITORY=baigsf/OWASP_Insecure_Application" >> "$GITHUB_ENV"
           echo "SCAN_REPO_SHA=$(git -C OWASP_Insecure_Application rev-parse HEAD)" >> "$GITHUB_ENV"
 
       - name: Install Semgrep
         run: |
           python3 -m pip install --upgrade pip
-          pip install semgrep
+          python3 -m pip install semgrep
 
       - name: Run Semgrep
         run: |
@@ -43,20 +43,17 @@ jobs:
           curl -sSfL \
             "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
             -o gitleaks.tar.gz
-
           tar -xzf gitleaks.tar.gz gitleaks
           sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
-
           gitleaks version
 
       - name: Run Gitleaks secret scan
         run: |
           mkdir -p output
-
           gitleaks detect \
-            --source="./OWASP_Insecure_Application" \
+            --source=./OWASP_Insecure_Application \
             --report-format=json \
-            --report-path="output/gitleaks-results.json" \
+            --report-path=output/gitleaks-results.json \
             --redact=100 \
             --exit-code=0
 
@@ -82,8 +79,9 @@ jobs:
           echo "Generated scan files:"
           find output -type f || true
 
-      - name: Generate HTML report
+      - name: Validate and generate HTML report
         run: |
+          python3 -m py_compile scripts/generate_report.py
           python3 scripts/generate_report.py
 
       - name: Show final output files
