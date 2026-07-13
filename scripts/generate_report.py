@@ -4,6 +4,7 @@ import os
 import glob
 from collections import Counter
 
+
 def make_github_file_url(path, line=None):
     if not path:
         return "#"
@@ -18,7 +19,10 @@ def make_github_file_url(path, line=None):
     if normalized.startswith(repo_folder):
         normalized = normalized[len(repo_folder):]
 
-    github_server_url = os.getenv("GITHUB_SERVER_URL", "https://github.com")
+    github_server_url = os.getenv(
+        "GITHUB_SERVER_URL",
+        "https://github.com"
+    )
 
     # IMPORTANT:
     # Use the scanned repo, not the repo running the workflow
@@ -30,12 +34,17 @@ def make_github_file_url(path, line=None):
     # Use scanned repo commit SHA if available, otherwise main
     scanned_ref = os.getenv("SCAN_REPO_SHA", "main")
 
-    url = f"{github_server_url}/{scanned_repository}/blob/{scanned_ref}/{normalized}"
+    url = (
+        f"{github_server_url}/"
+        f"{scanned_repository}/blob/"
+        f"{scanned_ref}/{normalized}"
+    )
 
     if line:
         url += f"#L{line}"
 
     return url
+
 
 def normalize(sev):
     sev = str(sev).upper()
@@ -66,7 +75,7 @@ def codeql_severity_from_result(result, rule_meta):
                 return "MEDIUM"
             else:
                 return "LOW"
-        except ValueError:
+        except (ValueError, TypeError):
             pass
 
     problem_severity = props.get("problem.severity")
@@ -117,15 +126,30 @@ try:
         line_number = r.get("start", {}).get("line", "")
 
         rule_url = f"https://semgrep.dev/r?q={rule_id}"
-        github_file_url = make_github_file_url(file_path, line_number)
+        github_file_url = make_github_file_url(
+            file_path,
+            line_number
+        )
 
         findings.append({
             "source": "Semgrep",
             "rule_id": rule_id,
             "file": file_path,
             "line": line_number,
-            "severity": r.get("extra", {}).get("severity", "UNKNOWN"),
-            "description": r.get("extra", {}).get("message", ""),
+            "severity": r.get(
+                "extra",
+                {}
+            ).get(
+                "severity",
+                "UNKNOWN"
+            ),
+            "description": r.get(
+                "extra",
+                {}
+            ).get(
+                "message",
+                ""
+            ),
             "cwe": meta.get("cwe", "N/A"),
             "owasp": meta.get("owasp", "N/A"),
             "rule_url": rule_url,
@@ -142,17 +166,27 @@ except Exception as e:
 codeql_sarif_files = []
 
 codeql_sarif_files.extend(
-    glob.glob("output/codeql-results/**/*.sarif", recursive=True)
+    glob.glob(
+        "output/codeql-results/**/*.sarif",
+        recursive=True
+    )
 )
 
 codeql_sarif_files.extend(
-    glob.glob("output/codeql-results/**/*.sarif.json", recursive=True)
+    glob.glob(
+        "output/codeql-results/**/*.sarif.json",
+        recursive=True
+    )
 )
 
 if not codeql_sarif_files:
-    print("No CodeQL SARIF files found in output/codeql-results")
+    print(
+        "No CodeQL SARIF files found in "
+        "output/codeql-results"
+    )
 else:
     print("CodeQL SARIF files found:")
+
     for sarif_file in codeql_sarif_files:
         print(f" - {sarif_file}")
 
@@ -164,25 +198,62 @@ for sarif_file in codeql_sarif_files:
         for run in codeql_data.get("runs", []):
             rule_meta = {}
 
-            for rule in run.get("tool", {}).get("driver", {}).get("rules", []):
+            rules = (
+                run.get("tool", {})
+                .get("driver", {})
+                .get("rules", [])
+            )
+
+            for rule in rules:
                 rule_id = rule.get("id", "")
 
                 rule_meta[rule_id] = {
                     "name": rule.get("name", ""),
                     "help_uri": rule.get("helpUri", "#"),
-                    "short_description": rule.get("shortDescription", {}).get("text", ""),
-                    "full_description": rule.get("fullDescription", {}).get("text", ""),
+                    "short_description": (
+                        rule.get(
+                            "shortDescription",
+                            {}
+                        ).get(
+                            "text",
+                            ""
+                        )
+                    ),
+                    "full_description": (
+                        rule.get(
+                            "fullDescription",
+                            {}
+                        ).get(
+                            "text",
+                            ""
+                        )
+                    ),
                     "cwe": extract_codeql_cwe(rule),
-                    "properties": rule.get("properties", {})
+                    "properties": rule.get(
+                        "properties",
+                        {}
+                    )
                 }
 
             for result in run.get("results", []):
-                rule_id = result.get("ruleId", "codeql_rule")
+                rule_id = result.get(
+                    "ruleId",
+                    "codeql_rule"
+                )
 
-                message = result.get("message", {}).get("text", "")
+                message = (
+                    result.get("message", {})
+                    .get("text", "")
+                )
 
                 if not message:
-                    message = rule_meta.get(rule_id, {}).get("short_description", "")
+                    message = rule_meta.get(
+                        rule_id,
+                        {}
+                    ).get(
+                        "short_description",
+                        ""
+                    )
 
                 file_path = ""
                 line_number = ""
@@ -190,14 +261,56 @@ for sarif_file in codeql_sarif_files:
                 locations = result.get("locations", [])
 
                 if locations:
-                    physical = locations[0].get("physicalLocation", {})
-                    file_path = physical.get("artifactLocation", {}).get("uri", "")
-                    line_number = physical.get("region", {}).get("startLine", "")
+                    physical = locations[0].get(
+                        "physicalLocation",
+                        {}
+                    )
 
-                severity = codeql_severity_from_result(result, rule_meta)
-                rule_url = rule_meta.get(rule_id, {}).get("help_uri", "#")
-                cwe = rule_meta.get(rule_id, {}).get("cwe", "N/A")
-                github_file_url = make_github_file_url(file_path, line_number)
+                    file_path = (
+                        physical.get(
+                            "artifactLocation",
+                            {}
+                        ).get(
+                            "uri",
+                            ""
+                        )
+                    )
+
+                    line_number = (
+                        physical.get(
+                            "region",
+                            {}
+                        ).get(
+                            "startLine",
+                            ""
+                        )
+                    )
+
+                severity = codeql_severity_from_result(
+                    result,
+                    rule_meta
+                )
+
+                rule_url = rule_meta.get(
+                    rule_id,
+                    {}
+                ).get(
+                    "help_uri",
+                    "#"
+                )
+
+                cwe = rule_meta.get(
+                    rule_id,
+                    {}
+                ).get(
+                    "cwe",
+                    "N/A"
+                )
+
+                github_file_url = make_github_file_url(
+                    file_path,
+                    line_number
+                )
 
                 findings.append({
                     "source": "CodeQL",
@@ -213,31 +326,162 @@ for sarif_file in codeql_sarif_files:
                 })
 
     except Exception as e:
-        print(f"Failed to parse CodeQL SARIF file {sarif_file}: {e}")
+        print(
+            "Failed to parse CodeQL SARIF file "
+            f"{sarif_file}: {e}"
+        )
+
+
+# -------------------------------
+# Load Gitleaks JSON results
+# -------------------------------
+try:
+    with open(
+        "output/gitleaks-results.json",
+        encoding="utf-8"
+    ) as f:
+        gitleaks_data = json.load(f)
+
+    # Standard Gitleaks JSON output is an array.
+    # Wrapped formats are also supported.
+    if isinstance(gitleaks_data, list):
+        gitleaks_results = gitleaks_data
+    elif isinstance(gitleaks_data, dict):
+        gitleaks_results = gitleaks_data.get(
+            "findings",
+            gitleaks_data.get("results", [])
+        )
+    else:
+        gitleaks_results = []
+
+    for result in gitleaks_results:
+        rule_id = result.get(
+            "RuleID",
+            "gitleaks_rule"
+        )
+
+        description = result.get(
+            "Description",
+            "Potential hardcoded secret detected"
+        )
+
+        file_path = result.get("File", "")
+        line_number = result.get("StartLine", "")
+        end_line = result.get("EndLine", "")
+        commit = result.get("Commit", "")
+        author = result.get("Author", "")
+        fingerprint = result.get("Fingerprint", "")
+
+        github_file_url = make_github_file_url(
+            file_path,
+            line_number
+        )
+
+        # Never place Secret, Match, or Line values in the
+        # dashboard because they may expose credentials.
+        description_parts = [description]
+
+        if end_line and str(end_line) != str(line_number):
+            description_parts.append(
+                f"Detection ends on line {end_line}."
+            )
+
+        if commit:
+            description_parts.append(
+                f"Commit: {commit}."
+            )
+
+        if author:
+            description_parts.append(
+                f"Author: {author}."
+            )
+
+        if fingerprint:
+            description_parts.append(
+                f"Fingerprint: {fingerprint}."
+            )
+
+        finding_description = " ".join(
+            str(part) for part in description_parts if part
+        )
+
+        findings.append({
+            "source": "Gitleaks",
+            "rule_id": f"Gitleaks: {rule_id}",
+            "file": file_path,
+            "line": line_number,
+            "severity": "HIGH",
+            "description": finding_description,
+            "cwe": "CWE-798",
+            "owasp": "Secret Detection",
+            "rule_url": (
+                "https://github.com/gitleaks/gitleaks"
+            ),
+            "github_file_url": github_file_url
+        })
+
+except FileNotFoundError:
+    print(
+        "No Gitleaks JSON file found at "
+        "output/gitleaks-results.json"
+    )
+
+except json.JSONDecodeError as e:
+    print(
+        "Failed to decode Gitleaks JSON results: "
+        f"{e}"
+    )
+
+except Exception as e:
+    print(f"Failed to load Gitleaks results: {e}")
 
 
 # -------------------------------
 # Normalize and summarize
 # -------------------------------
 for finding in findings:
-    finding["severity"] = normalize(finding["severity"])
+    finding["severity"] = normalize(
+        finding["severity"]
+    )
 
-priority = {"HIGH": 1, "MEDIUM": 2, "LOW": 3, "UNKNOWN": 4}
-findings.sort(key=lambda x: priority.get(x["severity"], 4))
+priority = {
+    "HIGH": 1,
+    "MEDIUM": 2,
+    "LOW": 3,
+    "UNKNOWN": 4
+}
 
-counts = Counter(f["severity"] for f in findings)
+findings.sort(
+    key=lambda x: priority.get(
+        x["severity"],
+        4
+    )
+)
+
+counts = Counter(
+    f["severity"] for f in findings
+)
 
 high_count = counts.get("HIGH", 0)
 medium_count = counts.get("MEDIUM", 0)
 low_count = counts.get("LOW", 0)
 unknown_count = counts.get("UNKNOWN", 0)
 
-source_counts = Counter(f["source"] for f in findings)
+source_counts = Counter(
+    f["source"] for f in findings
+)
 
 semgrep_count = source_counts.get("Semgrep", 0)
 codeql_count = source_counts.get("CodeQL", 0)
+gitleaks_count = source_counts.get("Gitleaks", 0)
 
-max_count = max(high_count, medium_count, low_count, unknown_count, 1)
+max_count = max(
+    high_count,
+    medium_count,
+    low_count,
+    unknown_count,
+    1
+)
 
 
 # -------------------------------
@@ -248,8 +492,12 @@ html_output = f"""
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
   <title>SAST Dashboard</title>
+
   <style>
     :root {{
       --bg: #f5f7fb;
@@ -293,7 +541,9 @@ html_output = f"""
       padding: 0;
       background: var(--bg);
       color: var(--text);
-      transition: background 0.25s ease, color 0.25s ease;
+      transition:
+        background 0.25s ease,
+        color 0.25s ease;
     }}
 
     .container {{
@@ -343,7 +593,8 @@ html_output = f"""
 
     .summary-grid {{
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      grid-template-columns:
+        repeat(auto-fit, minmax(180px, 1fr));
       gap: 16px;
       margin-bottom: 24px;
     }}
@@ -367,10 +618,21 @@ html_output = f"""
       font-weight: bold;
     }}
 
-    .high-text {{ color: var(--high); }}
-    .medium-text {{ color: var(--medium); }}
-    .low-text {{ color: var(--low); }}
-    .unknown-text {{ color: var(--unknown); }}
+    .high-text {{
+      color: var(--high);
+    }}
+
+    .medium-text {{
+      color: var(--medium);
+    }}
+
+    .low-text {{
+      color: var(--low);
+    }}
+
+    .unknown-text {{
+      color: var(--unknown);
+    }}
 
     .panel {{
       background: var(--card);
@@ -415,10 +677,21 @@ html_output = f"""
       transition: width 0.5s ease;
     }}
 
-    .bar-high {{ background: var(--high); }}
-    .bar-medium {{ background: var(--medium); }}
-    .bar-low {{ background: var(--low); }}
-    .bar-unknown {{ background: var(--unknown); }}
+    .bar-high {{
+      background: var(--high);
+    }}
+
+    .bar-medium {{
+      background: var(--medium);
+    }}
+
+    .bar-low {{
+      background: var(--low);
+    }}
+
+    .bar-unknown {{
+      background: var(--unknown);
+    }}
 
     .controls {{
       display: flex;
@@ -506,46 +779,80 @@ html_output = f"""
     }}
   </style>
 </head>
+
 <body>
   <div class="container">
 
     <div class="topbar">
       <div>
         <h1>SAST Security Dashboard</h1>
-        <div class="subtitle">Combined Semgrep and CodeQL findings</div>
+        <div class="subtitle">
+          Combined Semgrep, CodeQL, and Gitleaks findings
+        </div>
       </div>
-      <button class="toggle-btn" onclick="toggleTheme()">Toggle Dark Mode</button>
+
+      <button
+        class="toggle-btn"
+        onclick="toggleTheme()"
+      >
+        Toggle Dark Mode
+      </button>
     </div>
 
     <div class="summary-grid">
       <div class="summary-card">
         <div class="summary-label">High</div>
-        <div class="summary-value high-text">{high_count}</div>
+        <div class="summary-value high-text">
+          {high_count}
+        </div>
       </div>
 
       <div class="summary-card">
         <div class="summary-label">Medium</div>
-        <div class="summary-value medium-text">{medium_count}</div>
+        <div class="summary-value medium-text">
+          {medium_count}
+        </div>
       </div>
 
       <div class="summary-card">
         <div class="summary-label">Low</div>
-        <div class="summary-value low-text">{low_count}</div>
+        <div class="summary-value low-text">
+          {low_count}
+        </div>
       </div>
 
       <div class="summary-card">
         <div class="summary-label">Unknown</div>
-        <div class="summary-value unknown-text">{unknown_count}</div>
+        <div class="summary-value unknown-text">
+          {unknown_count}
+        </div>
       </div>
 
       <div class="summary-card">
-        <div class="summary-label">Semgrep Findings</div>
-        <div class="summary-value">{semgrep_count}</div>
+        <div class="summary-label">
+          Semgrep Findings
+        </div>
+        <div class="summary-value">
+          {semgrep_count}
+        </div>
       </div>
 
       <div class="summary-card">
-        <div class="summary-label">CodeQL Findings</div>
-        <div class="summary-value">{codeql_count}</div>
+        <div class="summary-label">
+          CodeQL Findings
+        </div>
+        <div class="summary-value">
+          {codeql_count}
+        </div>
+      </div>
+
+      <div class="summary-card">
+        <div class="summary-label">
+          Gitleaks Findings
+        </div>
+        <div class="summary-value">
+          {gitleaks_count}
+        </div>
       </div>
     </div>
 
@@ -558,8 +865,14 @@ html_output = f"""
             <span class="high-text">High</span>
             <span>{high_count}</span>
           </div>
+
           <div class="bar-track">
-            <div class="bar-fill bar-high" style="width: {(high_count / max_count) * 100:.2f}%"></div>
+            <div
+              class="bar-fill bar-high"
+              style="width: {
+                  (high_count / max_count) * 100
+              :.2f}%"
+            ></div>
           </div>
         </div>
 
@@ -568,8 +881,14 @@ html_output = f"""
             <span class="medium-text">Medium</span>
             <span>{medium_count}</span>
           </div>
+
           <div class="bar-track">
-            <div class="bar-fill bar-medium" style="width: {(medium_count / max_count) * 100:.2f}%"></div>
+            <div
+              class="bar-fill bar-medium"
+              style="width: {
+                  (medium_count / max_count) * 100
+              :.2f}%"
+            ></div>
           </div>
         </div>
 
@@ -578,8 +897,14 @@ html_output = f"""
             <span class="low-text">Low</span>
             <span>{low_count}</span>
           </div>
+
           <div class="bar-track">
-            <div class="bar-fill bar-low" style="width: {(low_count / max_count) * 100:.2f}%"></div>
+            <div
+              class="bar-fill bar-low"
+              style="width: {
+                  (low_count / max_count) * 100
+              :.2f}%"
+            ></div>
           </div>
         </div>
 
@@ -588,19 +913,27 @@ html_output = f"""
             <span class="unknown-text">Unknown</span>
             <span>{unknown_count}</span>
           </div>
+
           <div class="bar-track">
-            <div class="bar-fill bar-unknown" style="width: {(unknown_count / max_count) * 100:.2f}%"></div>
+            <div
+              class="bar-fill bar-unknown"
+              style="width: {
+                  (unknown_count / max_count) * 100
+              :.2f}%"
+            ></div>
           </div>
         </div>
       </div>
 
       <div class="footer-note">
-        The bar lengths are scaled relative to the largest severity count.
+        The bar lengths are scaled relative to the
+        largest severity count.
       </div>
     </div>
 
     <div class="panel">
       <h2>Search Findings</h2>
+
       <div class="controls">
         <input
           type="text"
@@ -617,38 +950,58 @@ html_output = f"""
 # Render findings
 # -------------------------------
 for finding in findings:
-    severity_class = f"{finding['severity'].lower()}-text"
+    severity_class = (
+        f"{finding['severity'].lower()}-text"
+    )
 
     html_output += f"""
     <div class="card">
       <h2 class="finding-title {severity_class}">
-        [{safe_text(finding['severity'])}] {safe_text(finding['rule_id'])}
-        <span class="source-pill">{safe_text(finding['source'])}</span>
+        [{safe_text(finding['severity'])}]
+        {safe_text(finding['rule_id'])}
+
+        <span class="source-pill">
+          {safe_text(finding['source'])}
+        </span>
       </h2>
 
       <p class="meta">
         <b>Impacted File:</b>
-        <a class="github-link" href="{safe_text(finding['github_file_url'])}" target="_blank">
+
+        }"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
           {safe_text(finding['file'])}:{safe_text(finding['line'])}
         </a>
       </p>
 
       <p class="meta">
-        <b>Description:</b> {safe_text(finding['description'])}
+        <b>Description:</b>
+        {safe_text(finding['description'])}
       </p>
 
       <p class="meta">
-        <b>CWE:</b> {safe_text(finding['cwe'])}
-        <span class="pill">{safe_text(finding['severity'])}</span>
+        <b>CWE:</b>
+        {safe_text(finding['cwe'])}
+
+        <span class="pill">
+          {safe_text(finding['severity'])}
+        </span>
       </p>
 
       <p class="meta">
-        <b>OWASP / Source Category:</b> {safe_text(finding['owasp'])}
+        <b>OWASP / Source Category:</b>
+        {safe_text(finding['owasp'])}
       </p>
 
       <p class="meta">
         <b>Remediation:</b><br>
-        <a class="rule-link" href="{safe_text(finding['rule_url'])}" target="_blank">
+
+        }"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
           View Fix Guidance
         </a>
       </p>
@@ -674,26 +1027,47 @@ html_output += """
     function toggleTheme() {
       document.body.classList.toggle("dark");
 
-      const isDark = document.body.classList.contains("dark");
-      localStorage.setItem("theme", isDark ? "dark" : "light");
+      const isDark =
+        document.body.classList.contains("dark");
+
+      localStorage.setItem(
+        "theme",
+        isDark ? "dark" : "light"
+      );
     }
 
     applySavedTheme();
 
-    document.getElementById("search").addEventListener("input", function(e) {
-      let term = e.target.value.toLowerCase();
+    document
+      .getElementById("search")
+      .addEventListener("input", function(e) {
+        let term = e.target.value.toLowerCase();
 
-      document.querySelectorAll(".card").forEach(card => {
-        card.style.display = card.innerText.toLowerCase().includes(term) ? "" : "none";
+        document
+          .querySelectorAll(".card")
+          .forEach(card => {
+            card.style.display =
+              card.innerText
+                .toLowerCase()
+                .includes(term)
+                ? ""
+                : "none";
+          });
       });
-    });
   </script>
 </body>
 </html>
 """
 
 
-with open("output/security-report.html", "w", encoding="utf-8") as f:
+with open(
+    "output/security-report.html",
+    "w",
+    encoding="utf-8"
+) as f:
     f.write(html_output)
 
-print("Dashboard generated: output/security-report.html")
+print(
+    "Dashboard generated: "
+    "output/security-report.html"
+)
